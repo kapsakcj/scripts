@@ -549,16 +549,22 @@ rm ./sistr/sistr_summary_temp
 #####This section provides data on the virulence and antibiotic resistance profiles for each isolates, from the databases that make up abricate
 echo 'Setting abricate db PATH'
 abricate_db_path=$(find /home/$USER/ -mount -path "*/abricate*/db")
-echo 'ABRICATE DB PATH SET'
+echo "ABRICATE DB PATH SET TO $abricate_db_path"
 declare -a databases=()
-for i in $abricate_db_path/*;
-    do b=`basename $i $abricate_db_path/`;
-    databases+=("$b");
+for i in $abricate_db_path/*; do
+    echo "i is set to $i"
+    if [[ "${i}" == "/home/curtis/Downloads/abricate-0.8.13/db/abricate" ]]; then
+        echo "skipping abricate db folder, no actual db there"
+    else
+        b=`basename $i $abricate_db_path/`;
+        databases+=("$b");
+    fi
 done
-echo ${databases[@]}
+echo "abricate db's to be queried: ${databases[@]}"
 make_directory abricate
 make_directory abricate/summary
 for y in ${databases[@]}; do
+    export y
     if [[ -n "$(find -path ./abricate/summary/${y}_summary)" ]]; then
         echo "Abricate kadabricate! ${y} has been run"
         continue
@@ -570,7 +576,6 @@ for y in ${databases[@]}; do
             'abricate --threads ${THREADS} -db ${y} /data/spades_assembly_trim/${i}/contigs.fasta > /data/abricate/${i}_${y}.tab'
         done
     fi
-    export y
     echo "variable y is set to:"${y}
     print_next_command $LINENO
     docker run -e y --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/abricate:0.8.7 /bin/bash -c \
