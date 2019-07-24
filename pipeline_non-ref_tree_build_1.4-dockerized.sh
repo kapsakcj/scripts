@@ -114,13 +114,23 @@ tmpfile=`cat $tmp1`
 for line in $tmpfile; do
     tmp=("${tmp[@]}" "$line");
 done
+
+echo '$srr array set to:' ${srr[@]}
+echo '$tmp array set to:' ${tmp[@]}
+
 id=($(printf "%s\n" "${tmp[@]}"|sort -u)) #Get all unique values and output them to array
-id=("${id[@]}" "${srr[@]}") #Combine the automatically generated list with the SRR list
+if [[ -z ${id+x} ]]; then
+  echo 'combining $id and $srr arrays...'
+  id=("${id[@]}" "${srr[@]}") #Combine the automatically generated list with the SRR list
+fi
+
 remove_file tmp
+
+echo '$id array set to:' ${id[@]}
 
 ##### Fetch and fastq-dump all reads from NCBI identified by "SRR" #####
 for i in ${srr[@]}; do
-    echo $i
+    echo '$i is set to:' $i
     if [[ -n "$(find *$i* 2>/dev/null)" ]]; then
         echo "Files are here."
     else
@@ -268,23 +278,43 @@ make_directory ./gff_files #make directory to hold the .gff files output by prok
 cp prokka/*/*.gff gff_files/ #copy over the .gff files from prokka
 
 ##### Run roary using the .gff file folder #####
-rm -rf roary
-print_next_command $LINENO ${i}
-docker run -e i -e THREADS --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/roary:3.12.0 /bin/bash -c \
-'roary -p ${THREADS} -e -n -v -f /data/roary /data/gff_files/*.gff'
+if [[ -e roary/core_gene_alignment.aln ]]; then
+   echo "Roary has already been run, skipping..."
+else
+  remove_file roary
+  echo "Running Roary...."
+  print_next_command $LINENO ${i}
+  docker run -e i -e THREADS --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/roary:3.12.0 /bin/bash -c \
+  'roary -p ${THREADS} -e -n -v -f /data/roary /data/gff_files/*.gff'
+fi
 
 ##### Run raxml on the roary alignment to generate a tree #####
-print_next_command $LINENO ${i}
-docker run -e i --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/lyveset:2.0.1 /bin/bash -c \
-'raxmlHPC -m GTRGAMMA -p 12345 -x 12345 -s /data/roary/core_gene_alignment.aln -# 100 -n phylo_output -f a'
-rm -rf raxml/
-make_directory raxml
-mv RAxML* raxml/
+if [[ -e raxml/RAxML_bestTree.phylo_output ]]; then
+  echo "RAxML has already been run, skipping..."
+else
+  echo "Running RAxML..."
+  print_next_command $LINENO ${i}
+  docker run -e i --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/lyveset:2.0.1 /bin/bash -c \
+  'raxmlHPC -m GTRGAMMA -p 12345 -x 12345 -s /data/roary/core_gene_alignment.aln -# 100 -n phylo_output -f a'
+  remove_file raxml/
+  make_directory raxml
+  mv RAxML* raxml/
+fi
+
+echo '$id array set to:' ${id[@]}
 
 ##### Move all of the fastq.gz files into a folder #####
 make_directory fastq_files
 for i in ${id[@]}; do
-    if [[ -n "$(find *$i*fastq.gz)" ]]; then
+    if [[ -e ${i}_1.fastq.gz ]]; then
+        echo "moving ${i} fastq files..."
         mv *$i*fastq.gz fastq_files
+    else
+        echo "fastq files for ${i} have already been moved to fastq_files/"
     fi
 done
+
+todays_date=$(date)
+echo "*******************************************************************"
+echo "pipeline_non_ref has finished on ${todays_date}."
+echo "*******************************************************************"
