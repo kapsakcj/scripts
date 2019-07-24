@@ -3,7 +3,7 @@
 #Usage: script to create a reference free phylogenetic tree from a set of fastq files
 #Permission to copy and modify is granted without warranty of any kind
 
-version="2.3"
+version="1.4"
 #Print out the line after the current line in the script, and print the evaluation
 #of how it will be executed
 print_next_command() {
@@ -11,7 +11,7 @@ print_next_command() {
     range=$(($1+1))
     x=0
     while [ $x == 0 ]; do
-        p=$(sed -n ${range}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
+        p=$(sed -n ${range}'p' ${HOME}/github-repos/scripts/pipeline_non-ref_tree_build_$version-dockerized.sh)
         if [[ $p == *\\ ]]; then
             range=$(($range+1))
         else
@@ -19,8 +19,8 @@ print_next_command() {
         fi
     done
     if [[ $range == $current_line ]]; then
-        #echo $(sed -n ${current_line}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
-        line_data=$(sed -n ${current_line}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
+        #echo $(sed -n ${current_line}'p' ${HOME}/github-repos/scripts/pipeline_non-ref_tree_build_$version-dockerized.sh)
+        line_data=$(sed -n ${current_line}'p' ${HOME}/github-repos/scripts/pipeline_non-ref_tree_build_$version-dockerized.sh)
         line_data=$(echo $line_data | sed "s/'//g")
         #echo line_data
         output_prefix=''
@@ -32,8 +32,8 @@ print_next_command() {
         eval echo $line_data
         eval echo $output_prefix$end
     else
-        #echo $(sed -n ${current_line}','${range}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
-        line_data=$(sed -n ${current_line}','${range}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
+        #echo $(sed -n ${current_line}','${range}'p' ${HOME}/github-repos/scripts/pipeline_non-ref_tree_build_$version-dockerized.sh)
+        line_data=$(sed -n ${current_line}','${range}'p' ${HOME}/github-repos/scripts/pipeline_non-ref_tree_build_$version-dockerized.sh)
         line_data=$(echo $line_data | sed "s/'//g")
         #echo $line_data
         output_prefix=''

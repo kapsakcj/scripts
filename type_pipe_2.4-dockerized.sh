@@ -546,6 +546,58 @@ echo $sistr_header >> ./sistr/sistr_summary
 grep -v "fasta_filepath" ./sistr/sistr_summary_temp >> ./sistr/sistr_summary
 rm ./sistr/sistr_summary_temp
 
+##### SeqSero2 #####
+echo "------------------------"
+echo "SeqSero2 about to run..."
+echo "------------------------"
+sal_isolates="$(awk -F ';' '$2 ~ /Salmonella/' ./mash/sample_id/raw.csv | awk -F ';' '{print$1}')"
+make_directory SeqSero2_output
+echo "Salmonella "$sal_isolates
+oddity="See comments below*"
+remove_file ./SeqSero2_output/all_serotype_results
+for i in $sal_isolates; do
+#for i in ${id[@]}; do #In case of emergency (classification acting up), uncomment this line to serotype every isolate using SeqSero, comment out line above
+    # Check if SeqSero output exists for each Salmonenlla spp. isolate; skip if so
+    if [[ -n "$(find -path ./SeqSero2_output/${i}/Seqsero2_result.txt 2>/dev/null)" ]]; then
+        echo "Skipping ${i}. ${i} has already been serotyped with SeqSero2."
+    else
+        # Run SeqSero for all Salmonella spp. isolates and output to SeqSero_output/<sample_name>"
+        if (find ./*$i*_[1,2]*fastq.gz); then
+            export i
+            echo "variable i is set to:"${i}
+            make_directory ./SeqSero2_output/${i}
+            print_next_command $LINENO
+            docker run -e i -e THREADS --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/seqsero2:1.0.0 /bin/bash -c \
+            'SeqSero2_package.py -m a -t 2 -i /data/*${i}*_[1,2]*fastq.gz -p ${THREADS} -d /data/SeqSero2_output/${i}'
+        elif (find ./*$i*R[1,2]*fastq.gz); then
+            export i
+            echo "variable i is set to:"${i}
+            make_directory ./SeqSero2_output/${i}
+            print_next_command $LINENO
+            docker run -e i -e THREADS --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/seqsero2:1.0.0 /bin/bash -c \
+            'SeqSero2_package.py -m a -t 2 -i /data/*${i}*R[1,2]*fastq.gz -p ${THREADS} -d /data/SeqSero2_output/${i}'
+        fi
+    fi
+    echo ${i} >> ./SeqSero2_output/all_serotype_results
+    head -10 ./SeqSero2_output/${i}/Seqsero_result.txt >> ./SeqSero2_output/all_serotype_results
+    echo >> ./SeqSero2_output/all_serotype_results
+    if [[ -n "$(find -path ./sistr/${i}_sistr-results.tab)" ]]; then
+        echo "${i} has a SISTR (file)."
+    else
+        print_next_command $LINENO
+        docker run --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/sistr:1.0.2 \
+        sistr -i /data/spades_assembly_trim/$i/contigs.fasta ${i} -t ${THREADS} -f tab -o /data/sistr/${i}_sistr-results
+    fi
+    sistr_header="$(head -1 ./sistr/${i}_sistr-results.tab)"
+    tail -n +2 ./sistr/${i}_sistr-results.tab >> ./sistr/sistr_summary_temp
+done
+echo $sistr_header
+echo $sistr_header >> ./sistr/sistr_summary
+grep -v "fasta_filepath" ./sistr/sistr_summary_temp >> ./sistr/sistr_summary
+rm ./sistr/sistr_summary_temp
+
+
+
 #####This section provides data on the virulence and antibiotic resistance profiles for each isolates, from the databases that make up abricate
 echo 'Setting abricate db PATH'
 abricate_db_path=$(find /home/$USER/ -mount -path "*/abricate*/db")
