@@ -23,7 +23,7 @@ print_next_command() {
     done
     if [[ $range == $current_line ]]; then
         #echo $(sed -n ${current_line}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
-        line_data=$(sed -n ${current_line}'p' ${HOME}/Downloads/scripts/type_pipe_$version-dockerized.sh)
+        line_data=$(sed -n ${current_line}'p' ${HOME}/github-repos/scripts/type_pipe_$version-dockerized.sh)
         line_data=$(echo $line_data | sed "s/'//g")
         #echo line_data
         output_prefix=''
@@ -36,7 +36,7 @@ print_next_command() {
         eval echo $output_prefix$end
     else
         #echo $(sed -n ${current_line}','${range}'p' /home/staphb/scripts/type_pipe_$version-dockerized.sh)
-        line_data=$(sed -n ${current_line}','${range}'p' ${HOME}/Downloads/scripts/type_pipe_$version-dockerized.sh)
+        line_data=$(sed -n ${current_line}','${range}'p' ${HOME}/github-repos/scripts/type_pipe_$version-dockerized.sh)
         line_data=$(echo $line_data | sed "s/'//g")
         #echo $line_data
         output_prefix=''
@@ -135,14 +135,16 @@ echo "Now checking to see if all necessary docker images are downloaded..."
 docker_image_check staphb/sratoolkit:2.9.2
 docker_image_check staphb/lyveset:2.0.1
 docker_image_check staphb/kraken:1.0
-docker_image_check staphb/spades:3.12.0
+docker_image_check staphb/spades:3.13.0
 docker_image_check staphb/mash:2.1
 docker_image_check staphb/serotypefinder:1.1
 docker_image_check staphb/seqsero:1.0.1
+docker_image_check staphb/seqsero2:1.0.0
 docker_image_check staphb/sistr:1.0.2
-docker_image_check staphb/abricate:0.8.7
+docker_image_check staphb/abricate:0.8.13
 docker_image_check staphb/bwa:0.7.17
 docker_image_check staphb/samtools:1.9
+docker_image_check staphb/shovill:1.0.4
 
 ##### Move all fastq files from fastq_files directory up one directory, remove fastq_files folder #####
 if [[ -e ./fastq_files ]]; then
@@ -282,8 +284,8 @@ for i in ${id[@]}; do
         export i
         echo "i is set to:"$i
         print_next_command $LINENO
-        docker run -e i -e THREADS --rm=True -v $PWD:/data -u $(id -u):$(id -g) staphb/spades:3.12.0 /bin/bash -c \
-        'spades.py --pe1-12 /data/clean/*$i*.cleaned.fastq.gz -t ${THREADS} --careful -o /data/spades_assembly_trim/${i}/'
+        docker run -e i -e THREADS --rm=True -v $PWD:/data -u $(id -u):$(id -g) staphb/spades:3.13.0 /bin/bash -c \
+        'spades.py --pe1-12 /data/clean/*$i*.cleaned.fastq.gz -t ${THREADS} --careful --only-assembler -o /data/spades_assembly_trim/${i}/'
         rm -rf ./spades_assembly_trim/$i/corrected \
 		./spades_assembly_trim/$i/K21 \
                 ./spades_assembly_trim/$i/K33 \
@@ -369,21 +371,21 @@ fi
 ## May need to alter CG-pipeline scripts to produce cleaned, trimmed reads
 ## as non-interleaved fastqs. May not be necessary since Shovil does have options
 ## for trimming adapters w/ trimmomatic and does it's own read correction using Lighter
-#make_directory ./shovill
-#for i in ${id[@]}; do
-#    if [[ -n "$(find -path ./shovill/$i/contigs.fa 2>/dev/null)" ]]; then #This will print out the size of the spades $
-#        size=$(du -hs ./shovill/$i/contigs.fa | awk '{print $1}');
-#        echo 'File exists and is '$size' big.'
-#    else
-#        echo 'constructing assemblies for '$i', could take some time...'
-#        # exporting `i` variable to make it available to the docker container
-#        export i
-#        echo "i is set to:"$i" , running shovill (spades) now...."
-#        print_next_command $LINENO
-#        docker run -e i --rm=True -v $PWD:/data -u $(id -u):$(id -g) staphb/shovill:1.0.4 /bin/bash -c \
-#        'shovill --outdir /data/shovill/${i}/ --R1 /data/*${i}*_1.fastq.gz --R2 /data/*${i}*_2.fastq.gz --ram 29 --cpus 0'
-#    fi
-#done
+make_directory ./shovill
+for i in ${id[@]}; do
+    if [[ -n "$(find -path ./shovill/$i/contigs.fa 2>/dev/null)" ]]; then #This will print out the size of the spades $
+        size=$(du -hs ./shovill/$i/contigs.fa | awk '{print $1}');
+        echo 'File exists and is '$size' big.'
+    else
+        echo 'constructing assemblies for '$i', could take some time...'
+        # exporting `i` variable to make it available to the docker container
+        export i
+        echo "i is set to:"$i" , running shovill (spades) now...."
+        print_next_command $LINENO
+        docker run -e i --rm=True -v $PWD:/data -u $(id -u):$(id -g) staphb/shovill:1.0.4 /bin/bash -c \
+        'shovill --outdir /data/shovill/${i}/ --R1 /data/*${i}*_1.fastq.gz --R2 /data/*${i}*_2.fastq.gz --ram 29 --cpus 0'
+    fi
+done
 
 ##### Run quast assembly statistics for verification that the assemblies worked #####
 make_directory quast
@@ -398,26 +400,26 @@ for i in ${id[@]}; do
 done
 
 ##### Run quast on shovill assemblies and generate summary output files #####
-#make_directory quast-shovill
-#for i in ${id[@]}; do
-#    if [[ -n "$(find -path ./quast-shovill/${i}_output_file 2>/dev/null)" ]]; then
-#        echo "Skipping "$i". It's shovill assembly has already been QUASTed."
-#    else
-#        print_next_command $LINENO
-#    	 docker run -e THREADS --rm=True -v $PWD:/data -u $(id -u):$(id -g) staphb/quast:5.0.0 \
-#    	 quast.py --fast -t ${THREADS} /data/shovill/$i/contigs.fa -o /data/quast-shovill/$i
-#    fi
-#done
+make_directory quast-shovill
+for i in ${id[@]}; do
+    if [[ -n "$(find -path ./quast-shovill/${i}_output_file 2>/dev/null)" ]]; then
+        echo "Skipping "$i". It's shovill assembly has already been QUASTed."
+    else
+        print_next_command $LINENO
+    	 docker run -e THREADS --rm=True -v $PWD:/data -u $(id -u):$(id -g) staphb/quast:5.0.0 \
+    	 quast.py --fast -t ${THREADS} /data/shovill/$i/contigs.fa -o /data/quast-shovill/$i
+    fi
+done
 
 ##### QUAST output file generation for shovill assemblies #####
-#for i in ${id[@]}; do
-#    remove_file quast-shovill/${i}_output_file
-#    tail -n +3 ./quast-shovill/$i/report.txt | grep "contigs (>= 0 bp)" >> quast-shovill/${i}_output_file
-#    tail -n +3 ./quast-shovill/$i/report.txt | grep "Total length (>= 0 bp)" >> quast-shovill/${i}_output_file
-#    tail -n +10 ./quast-shovill/$i/report.txt | grep "contigs" >> quast-shovill/${i}_output_file
-#    tail -n +10 ./quast-shovill/$i/report.txt | grep "N50" >> quast-shovill/${i}_output_file
-#    #May need to add in some files which explain the limits for different organisms, eg acceptable lengths of genome for e coli, accep$
-#done
+for i in ${id[@]}; do
+    remove_file quast-shovill/${i}_output_file
+    tail -n +3 ./quast-shovill/$i/report.txt | grep "contigs (>= 0 bp)" >> quast-shovill/${i}_output_file
+    tail -n +3 ./quast-shovill/$i/report.txt | grep "Total length (>= 0 bp)" >> quast-shovill/${i}_output_file
+    tail -n +10 ./quast-shovill/$i/report.txt | grep "contigs" >> quast-shovill/${i}_output_file
+    tail -n +10 ./quast-shovill/$i/report.txt | grep "N50" >> quast-shovill/${i}_output_file
+    #May need to add in some files which explain the limits for different organisms, eg acceptable lengths of genome for e coli, accep$
+done
 
 ##### QUAST quality check ######
 for i in ${id[@]}; do
@@ -558,7 +560,7 @@ remove_file ./SeqSero2_output/all_serotype_results
 for i in $sal_isolates; do
 #for i in ${id[@]}; do #In case of emergency (classification acting up), uncomment this line to serotype every isolate using SeqSero, comment out line above
     # Check if SeqSero output exists for each Salmonenlla spp. isolate; skip if so
-    if [[ -n "$(find -path ./SeqSero2_output/${i}/Seqsero2_result.txt 2>/dev/null)" ]]; then
+    if [[ -n "$(find -path ./SeqSero2_output/${i}/Seqsero_result.txt 2>/dev/null)" ]]; then
         echo "Skipping ${i}. ${i} has already been serotyped with SeqSero2."
     else
         # Run SeqSero for all Salmonella spp. isolates and output to SeqSero_output/<sample_name>"
@@ -624,13 +626,13 @@ for y in ${databases[@]}; do
         for i in ${id[@]}; do
 	    export i
             print_next_command $LINENO
-            docker run -e y -e i -e THREADS --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/abricate:0.8.7 /bin/bash -c \
+            docker run -e y -e i -e THREADS --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/abricate:0.8.13 /bin/bash -c \
             'abricate --threads ${THREADS} -db ${y} /data/spades_assembly_trim/${i}/contigs.fasta > /data/abricate/${i}_${y}.tab'
         done
     fi
     echo "variable y is set to:"${y}
     print_next_command $LINENO
-    docker run -e y --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/abricate:0.8.7 /bin/bash -c \
+    docker run -e y --rm=True -u $(id -u):$(id -g) -v $PWD:/data staphb/abricate:0.8.13 /bin/bash -c \
     'abricate --summary /data/abricate/*_${y}.tab > /data/abricate/summary/${y}_summary'
 done
 echo 'FINISHED RUNNING ABRICATE'
@@ -640,21 +642,21 @@ echo 'FINISHED RUNNING ABRICATE'
 remove_file isolate_info_file.tsv
 qc_metric_head=$(head -1 ./clean/readMetrics.tsv)
 # header line to use without shovill
-echo -e "$qc_metric_head\tcontigs\tlargest_contig\ttotal_length\tN50\tL50" >> isolate_info_file.tsv
+#echo -e "$qc_metric_head\tcontigs\tlargest_contig\ttotal_length\tN50\tL50" >> isolate_info_file.tsv
 # header line to use with shovill
-#echo -e "$qc_metric_head\tcontigs\tshovill_contigs\tlargest_contig\tshovill_largest_contig\ttotal_length\tshovill_total_length\tN50\tshovill_N50\tL50\tshovill_L50" >> isolate_info_file.tsv
+echo -e "$qc_metric_head\tcontigs\tshovill_contigs\tlargest_contig\tshovill_largest_contig\ttotal_length\tshovill_total_length\tN50\tshovill_N50\tL50\tshovill_L50" >> isolate_info_file.tsv
 for i in ${id[@]}; do
     qc_metric=$(grep "${i}" ./clean/readMetrics.tsv)
     contigs=$(tail -9 ./quast/${i}/report.txt |grep "contigs" |tr -s ' '|cut -d' ' -f3)
-#    shovill_contigs=$(tail -9 ./quast-shovill/${i}/report.txt |grep "contigs" |tr -s ' '|cut -d' ' -f3)
+    shovill_contigs=$(tail -9 ./quast-shovill/${i}/report.txt |grep "contigs" |tr -s ' '|cut -d' ' -f3)
     largest_contig=$(tail -9 ./quast/${i}/report.txt |grep "Largest contig" |tr -s ' '|cut -d' ' -f3)
-#    shovill_largest_contig=$(tail -9 ./quast-shovill/${i}/report.txt |grep "Largest contig" |tr -s ' '|cut -d' ' -f3)
+    shovill_largest_contig=$(tail -9 ./quast-shovill/${i}/report.txt |grep "Largest contig" |tr -s ' '|cut -d' ' -f3)
     total_length=$(tail -9 ./quast/${i}/report.txt |grep "Total length   " |tr -s ' '|cut -d' ' -f3)
-#    shovill_total_length=$(tail -9 ./quast-shovill/${i}/report.txt |grep "Total length" |tr -s ' '|cut -d' ' -f3)
+    shovill_total_length=$(tail -9 ./quast-shovill/${i}/report.txt |grep "Total length" |tr -s ' '|cut -d' ' -f3)
     N50=$(tail -9 ./quast/${i}/report.txt |grep "N50" |tr -s ' '|cut -d' ' -f2)
-#    shovill_N50=$(tail -9 ./quast-shovill/${i}/report.txt |grep "N50" |tr -s ' '|cut -d' ' -f2)
+    shovill_N50=$(tail -9 ./quast-shovill/${i}/report.txt |grep "N50" |tr -s ' '|cut -d' ' -f2)
     L50=$(tail -9 ./quast/${i}/report.txt |grep "L50" |tr -s ' '|cut -d' ' -f2)
-#    shovill_L50=$(tail -9 ./quast-shovill/${i}/report.txt |grep "L50" |tr -s ' '|cut -d' ' -f2)
+    shovill_L50=$(tail -9 ./quast-shovill/${i}/report.txt |grep "L50" |tr -s ' '|cut -d' ' -f2)
     if [ -z "$contigs" ]; then
          contigs="N/A"
     fi
@@ -675,8 +677,8 @@ for i in ${id[@]}; do
     echo -e "$qc_metric\t$contigs\t$largest_contig\t$total_length\t$N50\t$L50"
 
     # use these lines if shovill is turned on and you want to compare between SPAdes and shovill-spades outputs
-    #echo -e "$qc_metric\t$contigs\t$shovill_contigs\t$largest_contig\t$shovill_largest_contig\t$total_length\t$shovill_total_length\t$N50\t$shovill_N50\t$L50\t$shovill_L50" >> isolate_info_file.tsv
-    #echo -e "$qc_metric\t$contigs\t$shovill_contigs\t$largest_contig\t$shovill_largest_contig\t$total_length\t$shovill_total_length\t$N50\t$shovill_N50\t$L50\t$shovill_L50"
+    echo -e "$qc_metric\t$contigs\t$shovill_contigs\t$largest_contig\t$shovill_largest_contig\t$total_length\t$shovill_total_length\t$N50\t$shovill_N50\t$L50\t$shovill_L50" >> isolate_info_file.tsv
+    echo -e "$qc_metric\t$contigs\t$shovill_contigs\t$largest_contig\t$shovill_largest_contig\t$total_length\t$shovill_total_length\t$N50\t$shovill_N50\t$L50\t$shovill_L50"
 done
 
 
